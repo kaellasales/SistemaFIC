@@ -1,0 +1,53 @@
+services:
+  fic:
+    container_name: fic
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8080:8000"
+    depends_on:
+      fic_db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - static_volume:/app/static
+      - media_volume:/app/media
+      - log_volume:/app/logs
+    networks:
+        - fic_backend
+  fic_db:
+      image: postgres:16-alpine
+      container_name: fic_db
+      env_file:
+      - .env 
+      environment:
+        - POSTGRES_DB=${DB_NAME}
+        - POSTGRES_USER=${DB_USER}
+        - POSTGRES_PASSWORD=${DB_PASSWORD}
+      ports:
+        - "5433:5432"
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
+      volumes:
+        - postgres_data:/var/lib/postgresql/data
+      
+      networks:
+        - fic_backend
+
+networks:
+  fic_backend:
+    driver: bridge
+
+volumes:
+  static_volume: {}
+  postgres_data: {}
+  media_volume: {}
+  log_volume: {}
+          

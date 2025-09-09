@@ -1,0 +1,25 @@
+# Arquivos de Ambiente 
+.env
+
+# Arquivos do Docker e de Dados
+postgres_data/
+log_volume/
+
+# Arquivos do Python
+__pycache__/
+*.pyc
+venv/
+*.egg-info/
+
+# Arquivos de Mídia e Estáticos (Gerados pelo Django)
+# Geralmente não se versiona a mídia, pois são uploads de usuários.
+# Os estáticos podem ser gerados com o comando collectstatic.
+media_volume/
+static_volume/
+/media/
+/static/
+
+# Arquivos de IDEs e Editores
+.vscode/
+.idea/
+*.swp
