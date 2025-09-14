@@ -1,0 +1,245 @@
+[
+    {
+        "ID": "1",
+        "id_ibge": "12",
+        "Sigla": "AC",
+        "Nome": "Acre",
+        "Regiao": "Norte",
+        "Latitude": -9.0238,
+        "Longitude": -70.811
+    },
+    {
+        "ID": "2",
+        "id_ibge": "27",
+        "Sigla": "AL",
+        "Nome": "Alagoas",
+        "Regiao": "Nordeste",
+        "Latitude": -9.5713,
+        "Longitude": -36.782
+    },
+    {
+        "ID": "3",
+        "id_ibge": "13",
+        "Sigla": "AM",
+        "Nome": "Amazonas",
+        "Regiao": "Norte",
+        "Latitude": -3.4168,
+        "Longitude": -65.8561
+    },
+    {
+        "ID": "4",
+        "id_ibge": "16",
+        "Sigla": "AP",
+        "Nome": "Amapá",
+        "Regiao": "Norte",
+        "Latitude": 0.902,
+        "Longitude": -52.0036
+    },
+    {
+        "ID": "5",
+        "id_ibge": "29",
+        "Sigla": "BA",
+        "Nome": "Bahia",
+        "Regiao": "Nordeste",
+        "Latitude": -12.9714,
+        "Longitude": -38.5014
+    },
+    {
+        "ID": "6",
+        "id_ibge": "23",
+        "Sigla": "CE",
+        "Nome": "Ceará",
+        "Regiao": "Nordeste",
+        "Latitude": -3.7172,
+        "Longitude": -38.5434
+    },
+    {
+        "ID": "7",
+        "id_ibge": "53",
+        "Sigla": "DF",
+        "Nome": "Distrito Federal",
+        "Regiao": "Centro-Oeste",
+        "Latitude": -15.8267,
+        "Longitude": -47.9218
+    },
+    {
+        "ID": "8",
+        "id_ibge": "32",
+        "Sigla": "ES",
+        "Nome": "Espírito Santo",
+        "Regiao": "Sudeste",
+        "Latitude": -19.1834,
+        "Longitude": -40.3089
+    },
+    {
+        "ID": "9",
+        "id_ibge": "52",
+        "Sigla": "GO",
+        "Nome": "Goiás",
+        "Regiao": "Centro-Oeste",
+        "Latitude": -15.827,
+        "Longitude": -49.8362
+    },
+    {
+        "ID": "10",
+        "id_ibge": "21",
+        "Sigla": "MA",
+        "Nome": "Maranhão",
+        "Regiao": "Nordeste",
+        "Latitude": -2.5307,
+        "Longitude": -44.3078
+    },
+    {
+        "ID": "11",
+        "id_ibge": "31",
+        "Sigla": "MG",
+        "Nome": "Minas Gerais",
+        "Regiao": "Sudeste",
+        "Latitude": -19.9245,
+        "Longitude": -43.9352
+    },
+    {
+        "ID": "12",
+        "id_ibge": "50",
+        "Sigla": "MS",
+        "Nome": "Mato Grosso do Sul",
+        "Regiao": "Centro-Oeste",
+        "Latitude": -20.7722,
+        "Longitude": -54.7852
+    },
+    {
+        "ID": "13",
+        "id_ibge": "51",
+        "Sigla": "MT",
+        "Nome": "Mato Grosso",
+        "Regiao": "Centro-Oeste",
+        "Latitude": -12.6819,
+        "Longitude": -56.9211
+    },
+    {
+        "ID": "14",
+        "id_ibge": "15",
+        "Sigla": "PA",
+        "Nome": "Pará",
+        "Regiao": "Norte",
+        "Latitude": -1.4558,
+        "Longitude": -48.4902
+    },
+    {
+        "ID": "15",
+        "id_ibge": "25",
+        "Sigla": "PB",
+        "Nome": "Paraíba",
+        "Regiao": "Nordeste",
+        "Latitude": -7.2398,
+        "Longitude": -36.781
+    },
+    {
+        "ID": "16",
+        "id_ibge": "26",
+        "Sigla": "PE",
+        "Nome": "Pernambuco",
+        "Regiao": "Nordeste",
+        "Latitude": -8.0476,
+        "Longitude": -34.877
+    },
+    {
+        "ID": "17",
+        "id_ibge": "22",
+        "Sigla": "PI",
+        "Nome": "Piauí",
+        "Regiao": "Nordeste",
+        "Latitude": -5.0892,
+        "Longitude": -42.8016
+    },
+    {
+        "ID": "18",
+        "id_ibge": "41",
+        "Sigla": "PR",
+        "Nome": "Paraná",
+        "Regiao": "Sul",
+        "Latitude": -25.2521,
+        "Longitude": -52.0215
+    },
+    {
+        "ID": "19",
+        "id_ibge": "33",
+        "Sigla": "RJ",
+        "Nome": "Rio de Janeiro",
+        "Regiao": "Sudeste",
+        "Latitude": -22.9068,
+        "Longitude": -43.1729
+    },
+    {
+        "ID": "20",
+        "id_ibge": "24",
+        "Sigla": "RN",
+        "Nome": "Rio Grande do Norte",
+        "Regiao": "Nordeste",
+        "Latitude": -5.7945,
+        "Longitude": -35.211
+    },
+    {
+        "ID": "21",
+        "id_ibge": "11",
+        "Sigla": "RO",
+        "Nome": "Rondônia",
+        "Regiao": "Norte",
+        "Latitude": -11.4099,
+        "Longitude": -63.6825
+    },
+    {
+        "ID": "22",
+        "id_ibge": "14",
+        "Sigla": "RR",
+        "Nome": "Roraima",
+        "Regiao": "Norte",
+        "Latitude": 2.7376,
+        "Longitude": -62.0751
+    },
+    {
+        "ID": "23",
+        "id_ibge": "43",
+        "Sigla": "RS",
+        "Nome": "Rio Grande do Sul",
+        "Regiao": "Sul",
+        "Latitude": -30.0346,
+        "Longitude": -51.2177
+    },
+    {
+        "ID": "24",
+        "id_ibge": "42",
+        "Sigla": "SC",
+        "Nome": "Santa Catarina",
+        "Regiao": "Sul",
+        "Latitude": -27.2423,
+        "Longitude": -50.2189
+    },
+    {
+        "ID": "25",
+        "id_ibge": "28",
+        "Sigla": "SE",
+        "Nome": "Sergipe",
+        "Regiao": "Nordeste",
+        "Latitude": -10.9472,
+        "Longitude": -37.0731
+    },
+    {
+        "ID": "26",
+        "id_ibge": "35",
+        "Sigla": "SP",
+        "Nome": "São Paulo",
+        "Regiao": "Sudeste",
+        "Latitude": -23.5505,
+        "Longitude": -46.6333
+    },
+    {
+        "ID": "27",
+        "id_ibge": "17",
+        "Sigla": "TO",
+        "Nome": "Tocantins",
+        "Regiao": "Norte",
+        "Latitude": -10.1753,
+        "Longitude": -48.2982
+    }
+]

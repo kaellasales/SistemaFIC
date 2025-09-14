@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt',
+    'drf_yasg',
     'api'
 ]
 
@@ -125,7 +127,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
-
+STATIC_ROOT = '/app/static'
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
@@ -144,3 +146,34 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+AUTH_USER_MODEL = 'api.User'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+}
+
+
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'host.docker.internal'
+    EMAIL_PORT = 1025
+    EMAIL_USE_TLS = False
+    EMAIL_HOST_USER = ''       
+    EMAIL_HOST_PASSWORD = ''
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = os.getenv('EMAIL_HOST')
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+        
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+#Tempo de expiração do token de reset password
+PASSWORD_RESET_TIMEOUT = 3600
+
+
