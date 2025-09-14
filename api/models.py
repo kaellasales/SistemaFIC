@@ -107,6 +107,11 @@ class Aluno(models.Model):
 
     def __str__(self):
         return self.user.get_full_name()
+    
+    def delete(self, *args, **kwargs):
+        user = self.user
+        super().delete(*args, **kwargs)
+        user.delete()
 
 
 class Professor(models.Model):
