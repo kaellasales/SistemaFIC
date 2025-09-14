@@ -115,10 +115,14 @@ O comando `makemigrations` **NÃO** é automatizado, pois ele é uma ação que 
 1.  Altere um arquivo `api/models.py`.
 2.  **Manualmente**, crie o novo arquivo de migração rodando:
     ```bash
-    docker-compose exec web python manage.py makemigrations
+    docker-compose exec -it fic bash
     ```
+    ```bash
+    python manage.py makemigrations
+    ```
+
 3.  **Commite o novo arquivo de migração** gerado na pasta `migrations/` para o Git.
-4.  O `migrate` será aplicado automaticamente na próxima vez que você ou seus colegas rodarem `docker-compose up`.
+4.  O `migrate` será aplicado automaticamente na próxima vez que você rodar `docker-compose up`.
 
 ---
 
@@ -127,10 +131,10 @@ O comando `makemigrations` **NÃO** é automatizado, pois ele é uma ação que 
 Todos os comandos devem ser rodados na raiz do projeto.
 
 * **Executar um comando `manage.py` qualquer:**
-  Use o prefixo `docker-compose -it fic bash`.
+  Use o prefixo `docker-compose exec -it fic bash`.
   ```bash
   # Exemplo: Abrir o shell do Django
-  docker-compose -it fic bash
+  docker-compose exec -it fic bash
 
   # Exemplo: rodar migrations(com o shell aberto, OK?)
   python manage.py makemigrations
