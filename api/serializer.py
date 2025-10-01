@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.db import transaction
 from django.contrib.auth import get_user_model
-from api.models import Aluno, Estado, Municipio, Role, Professor
+from api.models import(Aluno, Estado, Municipio, Role, 
+Professor, CustomUserManager, Curso, Convite, InscricaoAluno)
 
 User = get_user_model()
 
@@ -35,10 +36,16 @@ class UserSerializer(serializers.ModelSerializer):
         required=True,
         style={'input_type': 'password'},
     )
+    
+    roles = serializers.SlugRelatedField(
+        many=True,
+        read_only=True,
+        slug_field='name'
+    )
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password', 'roles']
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
@@ -105,15 +112,24 @@ class ProfessorSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        user_data = validated_data.pop('user')
-        user = UserSerializer.create(UserSerializer(), validated_data=user_data)
-        professor = Professor.objects.create(user=user, **validated_data)
+        """Cria perfil de aluno, atualiza dados do usuário e atribui role ALUNO."""
+        user_data = validated_data.pop('user', {})
+        user = self.context['request'].user
 
-        professor_role, _ = Role.objects.get_or_create(name="PROFESSOR")
-        user.roles.add(professor_role)
+        # Atualiza dados do usuário
+        if isinstance(user_data, dict):
+            user.first_name = user_data.get('first_name', user.first_name)
+            user.last_name = user_data.get('last_name', user.last_name)
+            user.save()
 
-        return professor
+        # Cria o perfil do aluno
+        aluno = Aluno.objects.create(user=user, **validated_data)
 
+        # Atribui a role ALUNO ao usuário
+        aluno_role, _ = Role.objects.get_or_create(name="ALUNO")
+        user.roles.add(aluno_role)
+
+        return aluno
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     """Recebe o e-mail para iniciar processo de reset de senha."""
@@ -152,3 +168,56 @@ class ChangePasswordSerializer(serializers.Serializer):
             )
         # Aqui daria pra incluir validação de força da senha
         return data
+
+class CursoSerializer(serializers.ModelSerializer):
+    professores = ProfessorSerializer(many=True, read_only=True)
+    criador = ProfessorSerializer(read_only=True)
+
+    class Meta:
+        model = Curso
+        fields = ['id', 'nome', 'criador', 'professores']
+
+
+class ConviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=Convite
+        fields= ['curso', 'professor', 'status', 'data_envio', 'data_resposta']
+        depth = 1 
+
+
+class UserBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'email']
+
+class AlunoBasicSerializer(serializers.ModelSerializer):
+    user = UserBasicSerializer(read_only=True)
+    class Meta:
+        model = Aluno
+        fields = ['id', 'user']
+
+class CursoBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Curso
+        fields = ['id', 'nome']
+
+# O Serializer principal para a Inscrição
+class InscricaoAlunoSerializer(serializers.ModelSerializer):
+    aluno = AlunoBasicSerializer(read_only=True)
+    curso = CursoBasicSerializer(read_only=True)
+    
+    # Usamos um 'SerializerMethodField' para mostrar o texto do status, não só o código
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = InscricaoAluno
+        fields = [
+            'id',
+            'aluno',
+            'curso',
+            'status',
+            'status_display', # Campo extra para o frontend
+            'tipo_vaga',
+            'data_inscricao'
+        ]
+        read_only_fields = ['status', 'aluno']

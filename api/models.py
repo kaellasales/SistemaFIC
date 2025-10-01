@@ -1,9 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.db import models, transaction
 from django.core.validators import RegexValidator, EmailValidator
 from .managers import CustomUserManager
-
+import uuid
 
 cpf_validator = RegexValidator(
     regex=r'^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$',
@@ -11,8 +11,13 @@ cpf_validator = RegexValidator(
 )
 
 cep_validator = RegexValidator(
-    regex=r'^\d{5}-\d{3}$',
+    regex=r'^\d{5}\-?\d{3}$',
     message='CEP deve seguir o formato 99999-999.'
+)
+
+rg_validator = RegexValidator(
+    regex=r'^\d{10}\-?\d{1}$',
+    message='O Registro Geral possui 11 digitos.'
 )
 
 class Role(models.Model):
@@ -31,6 +36,18 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+    def delete(self, *args, **kwargs):
+        # Usamos transaction.atomic para garantir que tudo aconteça ou nada aconteça.
+        with transaction.atomic():
+            # Verifica se existe um perfil de aluno associado e o deleta primeiro
+            if hasattr(self, 'aluno'):
+                self.aluno.delete()
+            # O mesmo para professor
+            if hasattr(self, 'professor'):
+                self.professor.delete()
+            
+            # Chama o método delete original para deletar o usuário
+            super().delete(*args, **kwargs)
 
 class Estado(models.Model):
     id = models.BigIntegerField(primary_key=True)
@@ -84,9 +101,9 @@ class Aluno(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="perfil_aluno")
     data_nascimento=models.DateField(blank=True, null=True)
     sexo=models.CharField(max_length=1, choices=SexoChoices.choices, verbose_name="Sexo")
-    cpf=models.CharField(max_length=14, unique=True, blank=True, null=True, validators=[cpf_validator]) # CPF pode ser nulo
+    cpf=models.CharField(max_length=14, unique=True, blank=True, null=True, validators=[cpf_validator])
     
-    numero_identidade=models.CharField("Número do RG", max_length=20, blank=True)
+    numero_identidade=models.CharField("Número do RG", max_length=20, blank=True, validators=[rg_validator])
     orgao_expedidor=models.CharField(max_length=10, choices=OrgaoExpedidor.choices, verbose_name="Órgão Expedidor")
     uf_expedidor=models.ForeignKey(Estado, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="UF de Expedição")
     
@@ -115,7 +132,7 @@ class Aluno(models.Model):
 
 
 class Professor(models.Model):
-    user=models.OneToOneField(User, on_delete=models.CASCADE, related_name="perfil_professor")
+    user=models.OneToOneField(User, on_delete=models.CASCADE, related_name="professor")
     siape = models.CharField(max_length=20, unique=True)
     cpf = models.CharField(max_length=14, unique=True, validators=[cpf_validator])
     data_nascimento = models.DateField(null=True, blank=True)
@@ -126,3 +143,67 @@ class Professor(models.Model):
 
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.siape}"
+    
+
+class Curso(models.Model):
+    id=models.BigAutoField(primary_key=True)
+    nome=models.CharField(max_length=255, blank=False, null=False)
+    carga_horaria=models.IntegerField(blank=False, null=False)
+    descricao=models.TextField(blank=False)
+    criador=models.ForeignKey(Professor, on_delete=models.CASCADE)
+    professores=models.ManyToManyField(Professor, through='Convite', related_name="cursos_lecionados")
+    vagas_internas = models.PositiveIntegerField(
+        default=0, 
+        help_text="Número de vagas para alunos internos."
+    )
+    vagas_externas = models.PositiveIntegerField(
+        default=0,
+        help_text="Número de vagas para alunos externos."
+    )
+    def __str__(self):
+        return self.nome
+    
+
+class Convite(models.Model):
+    class StatusConvite(models.TextChoices):
+        PENDENTE = 'PENDENTE', 'Pendente'
+        ACEITO = 'ACEITO', 'Aceito'
+        RECUSADO = 'RECUSADO', 'Recusado'
+
+    curso = models.ForeignKey(Curso, on_delete=models.CASCADE)
+    professor = models.ForeignKey(Professor, on_delete=models.CASCADE)
+    
+    status = models.CharField(max_length=10, choices=StatusConvite.choices, default=StatusConvite.PENDENTE)
+    
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    
+    data_envio = models.DateTimeField(auto_now_add=True)
+    data_resposta = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('curso', 'professor') # Um professor só pode ser convidado uma vez para o mesmo curso
+
+    def __str__(self):
+        return f"Convite para {self.professor} no curso {self.curso.nome} ({self.status})"
+    
+
+
+class InscricaoAluno(models.Model):
+    class StatusInscricao(models.TextChoices):
+        AGUARDANDO_VALIDACAO = 'AGUARDANDO_VALIDACAO', 'Aguardando Validação'
+        CONFIRMADA = 'CONFIRMADA', 'Confirmada'
+        LISTA_ESPERA = 'LISTA_ESPERA', 'Lista de Espera'
+        CANCELADA = 'CANCELADA', 'Cancelada'
+
+    aluno = models.ForeignKey(Aluno, on_delete=models.CASCADE)
+    curso = models.ForeignKey(Curso, on_delete=models.CASCADE)
+    
+    status = models.CharField(max_length=30, choices=StatusInscricao.choices, default=StatusInscricao.AGUARDANDO_VALIDACAO)
+    data_inscricao = models.DateTimeField(auto_now_add=True)
+    
+    tipo_vaga = models.CharField(max_length=10, choices=(('INTERNO', 'Interno'), ('EXTERNO', 'Externo')))
+    class Meta:
+        unique_together = ('aluno', 'curso')
+
+    def __str__(self):
+        return f"Inscrição de {self.aluno.user.username} em {self.curso.nome}"
