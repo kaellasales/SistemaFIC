@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from api.models import(Aluno, Estado, Municipio, Role, 
-Professor, CustomUserManager, Curso, Convite, InscricaoAluno)
+Professor, CustomUserManager, Curso, InscricaoAluno)
 
 User = get_user_model()
 
@@ -178,11 +178,11 @@ class CursoSerializer(serializers.ModelSerializer):
         fields = ['id', 'nome', 'criador', 'professores']
 
 
-class ConviteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model=Convite
-        fields= ['curso', 'professor', 'status', 'data_envio', 'data_resposta']
-        depth = 1 
+# class ConviteSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model=Convite
+#         fields= ['curso', 'professor', 'status', 'data_envio', 'data_resposta']
+#         depth = 1 
 
 
 class UserBasicSerializer(serializers.ModelSerializer):

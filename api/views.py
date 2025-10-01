@@ -17,12 +17,12 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.http import Http404
 from django.db import transaction
 
-from api.models import (User, Estado, Municipio, Role, Aluno, Professor, Curso, Convite, InscricaoAluno)
+from api.models import (User, Estado, Municipio, Role, Aluno, Professor, Curso, InscricaoAluno)
 from api.serializer import (
     AlunoRegistroSerializer, AlunoPerfilSerializer, ProfessorSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
     ChangePasswordSerializer, UserSerializer, UserUpdateSerializer,
-    CursoSerializer, ConviteSerializer, InscricaoAlunoSerializer
+    CursoSerializer, InscricaoAlunoSerializer
 )
 
 class MeView(APIView):
@@ -245,126 +245,6 @@ class CursoViewSet(viewsets.ModelViewSet):
         # 3. Adiciona o professor criador à lista ManyToMany de professores do curso.
         curso_criado.professores.add(professor_criador)
 
-
-
-    @action(detail=True, methods=['post'], url_path='enviar-convites')
-    def enviar_convites(self, request, pk=None):
-        curso = self.get_object()
-
-        # Garante que apenas o criador pode enviar convites
-        if request.user.professor != curso.criador:
-            return Response({'error': 'Apenas o criador do curso pode enviar convites.'}, status=status.HTTP_403_FORBIDDEN)
-
-        ids_dos_professores = request.data.get('professor_ids', [])
-        if not isinstance(ids_dos_professores, list):
-                return Response({'error': 'O campo "professor_ids" deve ser uma lista de IDs.'}, status=status.HTTP_400_BAD_REQUEST)
-        professores_para_convidar = Professor.objects.filter(id__in=ids_dos_professores)
-
-
-        convites_criados = []
-        # O resto da lógica continua quase idêntica!
-        for professor in professores_para_convidar:
-            convite, created = Convite.objects.get_or_create(
-                curso=curso, 
-                professor_convidado=professor
-            )
-            if created:
-                convites_criados.append(convite)
-
-        # Lógica para enviar os e-mails (pode ser otimizado com send_mass_mail)
-        for convite in convites_criados:
-            url_aceitar = f"https://localhost:8080/convite/aceitar/{convite.token}"
-            
-            contexto_email = {
-                'nome_professor': convite.professor_convidado.nome,
-                'nome_curso': curso.nome,
-                'criador_curso': curso.criador.nome,
-                'url_aceitar': url_aceitar,
-            }
-            
-            html_message = render_to_string('emails/template_convite.html', contexto_email)
-            plain_message = strip_tags(html_message)
-            
-            send_mail(
-                subject=f'Convite para lecionar no curso {curso.nome}',
-                message=plain_message,
-                from_email='nao-responda@sua-plataforma.com',
-                recipient_list=[convite.professor_convidado.user.email],
-                html_message=html_message
-            )
-                
-        return Response({'message': f'{len(convites_criados)} convites enviados com sucesso.'}, status=status.HTTP_200_OK)
-    
-
-class ConviteViewSet(mixins.RetrieveModelMixin, # Permite buscar um convite pelo token (GET)
-                     viewsets.GenericViewSet):
-    """
-    ViewSet para visualizar e responder a convites.
-    As operações são baseadas no token do convite.
-    """
-    queryset = Convite.objects.all()
-    serializer_class = ConviteSerializer
-    permission_classes = [permissions.IsAuthenticated] # O usuário precisa estar logado para responder
-    
-    # Diz ao DRF para usar o campo 'token' na URL em vez do 'id'
-    lookup_field = 'token' 
-
-    @action(detail=True, methods=['post'], url_path='responder')
-    def responder(self, request, token=None):
-        """
-        Endpoint para um professor aceitar ou recusar um convite.
-        URL: POST /api/convites/{token}/responder/
-        Body: { "acao": "aceitar" } ou { "acao": "recusar" }
-        """
-        convite = self.get_object() # Pega o convite usando o token da URL
-
-        # --- Validações de Segurança Essenciais ---
-        
-        # 1. Checa se o convite ainda está pendente.
-        if convite.status != 'PENDENTE':
-            return Response({'error': 'Este convite já foi respondido.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 2. Checa se o usuário logado é DE FATO o professor que foi convidado.
-        #    Isso impede que um usuário aceite o convite de outro.
-        if request.user.professor != convite.professor_convidado:
-            return Response(
-                {'error': 'Você não tem permissão para responder a este convite.'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-            
-        # --- Lógica da Resposta ---
-
-        acao = request.data.get('acao')
-
-        if acao == 'aceitar':
-            convite.status = 'ACEITO'
-            # ADICIONA O PROFESSOR AO CURSO!
-            # Esta é a ação final que efetiva a participação dele.
-            convite.curso.professores.add(convite.professor_convidado)
-
-            # Notifica o criador do curso que o convite foi aceito
-            send_mail(
-                subject=f'Resposta ao convite para o curso "{convite.curso.nome}"',
-                message=(
-                    f'Olá, {convite.curso.criador.nome}.\n\n'
-                    f'O professor {convite.professor_convidado.nome} ACEITOU seu convite '
-                    f'para lecionar no curso "{convite.curso.nome}".'
-                ),
-                from_email='notificacoes@sua-plataforma.com',
-                recipient_list=[convite.curso.criador.user.email],
-            )
-        elif acao == 'recusar':
-            convite.status = 'RECUSADO'
-            # (Opcional) Você também poderia notificar o criador sobre a recusa.
-        else:
-            return Response({'error': 'Ação inválida. A "acao" deve ser "aceitar" ou "recusar".'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        convite.data_resposta = timezone.now()
-        convite.save()
-        
-        serializer = self.get_serializer(convite)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
 
 class InscricaoAlunoViewSet(mixins.CreateModelMixin, # Permite POST (create)
                             mixins.ListModelMixin,   # Permite GET (list)

@@ -18,7 +18,7 @@ from drf_yasg.views import get_schema_view
 from api.views import (
     AlunoRegistroView, AlunoPerfilView, ChangePasswordView,
     PasswordResetConfirmView, PasswordResetRequestView, LogoutView,
-    ProfessorViewSet, UserViewSet, CursoViewSet, ConviteViewSet,
+    ProfessorViewSet, UserViewSet, CursoViewSet,
     InscricaoAlunoViewSet, MeView
     
 )
@@ -58,7 +58,6 @@ router = routers.DefaultRouter()
 router.register(r'professor', ProfessorViewSet, basename='Professor')
 router.register(r'usuario', UserViewSet, basename="User")
 router.register(r'cursos', CursoViewSet)
-router.register(r'convites', ConviteViewSet, basename='convite') 
 router.register(r'inscricoes-aluno', InscricaoAlunoViewSet, basename='inscricao-aluno')
 
 # --- URLs principais ---
