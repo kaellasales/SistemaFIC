@@ -32,7 +32,6 @@ class User(AbstractUser):
     USERNAME_FIELD = 'email' # Define qual campo é o identificador único para o LOGIN
     REQUIRED_FIELDS = [] 
     objects = CustomUserManager()
-    roles = models.ManyToManyField(Role, blank=True, related_name="users")
 
     def __str__(self):
         return self.email

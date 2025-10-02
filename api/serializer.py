@@ -1,18 +1,12 @@
 from rest_framework import serializers
 from django.db import transaction
+from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
 from api.models import(Aluno, Estado, Municipio, Role, 
 Professor, CustomUserManager, Curso, InscricaoAluno)
+from django.contrib.auth.hashers import make_password
 
 User = get_user_model()
-
-
-class RoleSerializer(serializers.ModelSerializer):
-    """Serializer básico para roles de usuário."""
-
-    class Meta:
-        model = Role
-        fields = ('name',)
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
@@ -37,7 +31,7 @@ class UserSerializer(serializers.ModelSerializer):
         style={'input_type': 'password'},
     )
     
-    roles = serializers.SlugRelatedField(
+    groups = serializers.SlugRelatedField(
         many=True,
         read_only=True,
         slug_field='name'
@@ -45,7 +39,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password', 'roles']
+        fields = ['id', 'email', 'first_name', 'last_name', 'password', 'groups']
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
@@ -56,8 +50,8 @@ class AlunoRegistroSerializer(UserSerializer):
 
     def create(self, validated_data):
         user = super().create(validated_data)
-        aluno_role, _ = Role.objects.get_or_create(name="ALUNO")
-        user.roles.add(aluno_role)
+        grupo_aluno, _ = Group.objects.get_or_create(name="ALUNO")
+        user.groups.add(grupo_aluno)
         return user
 
 
@@ -100,37 +94,44 @@ class AlunoPerfilSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
-
 class ProfessorSerializer(serializers.ModelSerializer):
-    """Cria professor e atribui automaticamente a role 'PROFESSOR'."""
-
-    user = UserSerializer()
-
+    user = UserSerializer(write_only=True)
     class Meta:
         model = Professor
         fields = ['id', 'user', 'siape', 'cpf', 'data_nascimento']
+        read_only_fields = ['id']
 
-    @transaction.atomic
     def create(self, validated_data):
-        """Cria perfil de aluno, atualiza dados do usuário e atribui role ALUNO."""
-        user_data = validated_data.pop('user', {})
-        user = self.context['request'].user
+        user_data = validated_data.pop('user')
+        user = User.objects.create_user(**user_data)
+        grupo_professor, _ = Group.objects.get_or_create(name="PROFESSOR")
+        user.groups.add(grupo_professor)
+        professor = Professor.objects.create(user=user, **validated_data)
+        return professor
 
+class ProfessorUpdateSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(source='user.first_name', required=True)
+    last_name = serializers.CharField(source='user.last_name', required=True)
+    email = serializers.EmailField(source='user.email', required=True)
+    password = serializers.CharField(write_only=True, required=False)
+
+    class Meta:
+        model = Professor
+        fields = ['first_name', 'last_name', 'email', 'password', 'siape', 'cpf', 'data_nascimento']
+
+    def update(self, instance, validated_data):
         # Atualiza dados do usuário
-        if isinstance(user_data, dict):
-            user.first_name = user_data.get('first_name', user.first_name)
-            user.last_name = user_data.get('last_name', user.last_name)
-            user.save()
+        user_data = validated_data.pop('user', {})
+        for attr, value in user_data.items():
+            setattr(instance.user, attr, value)
+        instance.user.save()
 
-        # Cria o perfil do aluno
-        aluno = Aluno.objects.create(user=user, **validated_data)
-
-        # Atribui a role ALUNO ao usuário
-        aluno_role, _ = Role.objects.get_or_create(name="ALUNO")
-        user.roles.add(aluno_role)
-
-        return aluno
-
+        # Atualiza dados do professor
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+        
 class PasswordResetRequestSerializer(serializers.Serializer):
     """Recebe o e-mail para iniciar processo de reset de senha."""
 
@@ -176,14 +177,6 @@ class CursoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Curso
         fields = ['id', 'nome', 'criador', 'professores']
-
-
-# class ConviteSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model=Convite
-#         fields= ['curso', 'professor', 'status', 'data_envio', 'data_resposta']
-#         depth = 1 
-
 
 class UserBasicSerializer(serializers.ModelSerializer):
     class Meta:

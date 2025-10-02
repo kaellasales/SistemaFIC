@@ -6,7 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 
-from api.permissions import IsProfessorUser, IsAlunoUser
+from api.permissions import IsProfessorUser, IsAlunoUser, IsAdminUser, IsCCAUser
 
 from django.conf import settings
 from django.core.mail import send_mail, EmailMultiAlternatives
@@ -17,12 +17,12 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.http import Http404
 from django.db import transaction
 
-from api.models import (User, Estado, Municipio, Role, Aluno, Professor, Curso, InscricaoAluno)
+from api.models import (User, Estado, Municipio, Aluno, Professor, Curso, InscricaoAluno)
 from api.serializer import (
     AlunoRegistroSerializer, AlunoPerfilSerializer, ProfessorSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
     ChangePasswordSerializer, UserSerializer, UserUpdateSerializer,
-    CursoSerializer, InscricaoAlunoSerializer
+    CursoSerializer, InscricaoAlunoSerializer, ProfessorUpdateSerializer
 )
 
 class MeView(APIView):
@@ -79,16 +79,23 @@ class AlunoPerfilView(mixins.CreateModelMixin,
         """Associa o usuário logado ao criar o perfil."""
         serializer.save()
 
-
 class ProfessorViewSet(viewsets.ModelViewSet):
-    """ViewSet para gerenciamento de professores."""
-    queryset = Professor.objects.all()
-    serializer_class = ProfessorSerializer
-
+    """
+    ViewSet para gerenciar Professores com lógica granular para o CCA.
+    """
+    queryset = Professor.objects.select_related('user').all()
+    
+    def get_serializer_class(self):
+        is_cca = self.request.user.groups.filter(name='CCA').exists()
+        
+        
+        if is_cca and self.action=='create':
+            return ProfessorSerializer
+        return ProfessorUpdateSerializer
+    
     def get_permissions(self):
-        """Define permissões diferentes para ações administrativas."""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAdminUser()]
+            return [IsCCAUser()]     
         return [IsAuthenticated()]
 
 
@@ -244,6 +251,7 @@ class CursoViewSet(viewsets.ModelViewSet):
         
         # 3. Adiciona o professor criador à lista ManyToMany de professores do curso.
         curso_criado.professores.add(professor_criador)
+
 
 
 class InscricaoAlunoViewSet(mixins.CreateModelMixin, # Permite POST (create)

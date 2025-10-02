@@ -6,8 +6,10 @@ class IsAdminUser(BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_staff
     
-
-
+class IsCCAUser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.groups.filter(name="CCA").exists()
+    
 class IsProfessorUser(permissions.BasePermission):
     """
     Permite acesso apenas a usuários autenticados que tenham um perfil de professor.

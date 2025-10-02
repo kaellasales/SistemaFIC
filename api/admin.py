@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
-from .models import User, Municipio, Estado, Aluno, CustomUserManager
+from .models import User, Municipio, Estado, Aluno, CustomUserManager, Role
 
 
 @admin.register(Estado)
@@ -53,3 +53,11 @@ class AlunoAdmin(admin.ModelAdmin):
     list_display = ('user', 'cpf', 'data_nascimento', 'telefone_celular')
     search_fields = ('user__username', 'user__email', 'cpf')
     list_filter = ('sexo', 'naturalidade', 'cidade')
+
+
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    """Admin para modelo Aluno."""
+    list_display = ['name']
+    search_fields = ['name']
+    list_filter = ['name']
