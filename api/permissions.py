@@ -11,12 +11,17 @@ class IsCCAUser(BasePermission):
         return request.user.groups.filter(name="CCA").exists()
     
 class IsProfessorUser(permissions.BasePermission):
-    """
-    Permite acesso apenas a usuários autenticados que tenham um perfil de professor.
-    """
+    """Permite acesso apenas a usuários que tenham um perfil de Professor."""
     def has_permission(self, request, view):
-        # O usuário precisa estar logado E ter o atributo 'professor' (a relação OneToOne)
-        return request.user and request.user.is_authenticated and hasattr(request.user, 'PROFESSOR')
+        return request.user.is_authenticated and hasattr(request.user, 'professor')
+
+class IsProfessorOrCCAUser(permissions.BasePermission):
+    """Permite acesso a usuários dos grupos 'PROFESSOR' ou 'CCA'."""
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        # Aqui, como estamos checando múltiplos grupos, a verificação de grupos é ideal.
+        return request.user.groups.filter(name__in=['PROFESSOR', 'CCA']).exists()
     
 class IsAlunoUser(permissions.BasePermission):
     def has_permission(self, request, view):

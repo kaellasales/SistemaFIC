@@ -20,11 +20,6 @@ rg_validator = RegexValidator(
     message='O Registro Geral possui 11 digitos.'
 )
 
-class Role(models.Model):
-    name = models.CharField(max_length=50, unique=True)  # Ex: 'ADMIN', 'PROFESSOR', 'ALUNO'
-
-    def __str__(self):
-        return self.name
 
 class User(AbstractUser):
     username = None
@@ -145,21 +140,41 @@ class Professor(models.Model):
     
 
 class Curso(models.Model):
-    id=models.BigAutoField(primary_key=True)
-    nome=models.CharField(max_length=255, blank=False, null=False)
-    carga_horaria=models.IntegerField(blank=False, null=False)
-    descricao=models.TextField(blank=False)
-    criador=models.ForeignKey(Professor, on_delete=models.CASCADE)
-    vagas_internas = models.PositiveIntegerField(
-        default=0, 
-        help_text="Número de vagas para alunos internos."
-    )
-    vagas_externas = models.PositiveIntegerField(
-        default=0,
-        help_text="Número de vagas para alunos externos."
-    )
+    """
+    Representa um curso oferecido na plataforma.
+    """
+    class StatusChoices(models.TextChoices):
+        AGENDADO = 'AGENDADO', 'Agendado'
+        INSCRICOES_ABERTAS = 'INSCRIÇÕES ABERTAS', 'Inscrições Abertas'
+        EM_ANDAMENTO = 'EM ANDAMENTO', 'Em Andamento'
+        FINALIZADO = 'FINALIZADO','Finalizado'
+        CANCELADO = 'CANCELADO','Cancelado'
+
+    # --- Atributos em uma única linha ---
+    nome = models.CharField(max_length=255, verbose_name="Nome do Curso")
+    descricao = models.TextField(verbose_name="Descrição Completa")
+    descricao_curta = models.CharField(max_length=200, verbose_name="Descrição Curta", help_text="Texto que aparecerá nos cards do curso.")
+    requisitos = models.TextField(verbose_name="Requisitos do Curso", blank=True)
+    carga_horaria = models.PositiveIntegerField(verbose_name="Carga Horária (em horas)")
+    vagas_internas = models.PositiveIntegerField(default=20, verbose_name="Vagas para Alunos Internos")
+    vagas_externas = models.PositiveIntegerField(default=10, verbose_name="Vagas para Alunos Externos")
+    data_inicio_inscricoes = models.DateTimeField(verbose_name="Início das Inscrições")
+    data_fim_inscricoes = models.DateTimeField(verbose_name="Fim das Inscrições")
+    data_inicio_curso = models.DateField(verbose_name="Início do Curso")
+    data_fim_curso = models.DateField(verbose_name="Fim do Curso")
+    status = models.CharField(max_length=20, choices=StatusChoices.choices, default=StatusChoices.AGENDADO, verbose_name="Status do Curso")
+
+    # --- Relações ---
+    criador = models.ForeignKey(Professor, on_delete=models.SET_NULL, null=True, related_name='cursos_criados', verbose_name="Professor Criador")
+    
+    class Meta:
+        verbose_name = "Curso"
+        verbose_name_plural = "Cursos"
+        ordering = ['nome']
+
     def __str__(self):
         return self.nome
+
     
 
 # class Convite(models.Model):

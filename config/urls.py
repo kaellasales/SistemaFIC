@@ -13,14 +13,14 @@ from api.views import (
     AlunoRegistroView, AlunoPerfilView, ChangePasswordView,
     PasswordResetConfirmView, PasswordResetRequestView, LogoutView,
     ProfessorViewSet, UserViewSet, CursoViewSet,
-    InscricaoAlunoViewSet, MeView
+    InscricaoAlunoViewSet, MeView, 
 )
 
 # --- Router para ViewSets ---
 router = routers.DefaultRouter()
 router.register(r'professor', ProfessorViewSet, basename='Professor')
 router.register(r'usuario', UserViewSet, basename="User")
-router.register(r'cursos', CursoViewSet)
+router.register(r'cursos', CursoViewSet,basename="Curso")
 router.register(r'inscricoes-aluno', InscricaoAlunoViewSet, basename='inscricao-aluno')
 
 # --- URLs da API (que serão documentadas) ---
@@ -64,7 +64,8 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
-    patterns=api_urlpatterns,  # <--- ADICIONE ESTA LINHA
+     authentication_classes=[],
+    patterns=api_urlpatterns, 
 )
 
 # --- URLs principais ---

@@ -22,7 +22,7 @@ from api.serializer import (
     AlunoRegistroSerializer, AlunoPerfilSerializer, ProfessorSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
     ChangePasswordSerializer, UserSerializer, UserUpdateSerializer,
-    CursoSerializer, InscricaoAlunoSerializer, ProfessorUpdateSerializer
+    CursoSerializer, InscricaoAlunoSerializer,PasswordResetSerializer
 )
 
 class MeView(APIView):
@@ -32,6 +32,7 @@ class MeView(APIView):
         user = request.user
         serializer = UserSerializer(user)
         return Response(serializer.data)
+
 
 class AlunoRegistroView(generics.CreateAPIView):
     """Endpoint público para que novos alunos possam se registrar."""
@@ -79,26 +80,48 @@ class AlunoPerfilView(mixins.CreateModelMixin,
         """Associa o usuário logado ao criar o perfil."""
         serializer.save()
 
+
 class ProfessorViewSet(viewsets.ModelViewSet):
     """
-    ViewSet para gerenciar Professores com lógica granular para o CCA.
+    ViewSet para o CCA gerenciar Professores.
+    Agora usa um único serializer principal para todas as ações.
     """
     queryset = Professor.objects.select_related('user').all()
     
-    def get_serializer_class(self):
-        is_cca = self.request.user.groups.filter(name='CCA').exists()
-        
-        
-        if is_cca and self.action=='create':
-            return ProfessorSerializer
-        return ProfessorUpdateSerializer
-    
+    # Define o serializer padrão para o ViewSet
+    serializer_class = ProfessorSerializer
+
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsCCAUser()]     
+        """Sua lógica de permissões continua perfeita."""
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'set_password', 'list']:
+            return [IsCCAUser()]
         return [IsAuthenticated()]
+    
+    def get_serializer_class(self):
+        """
+        Usa o serializer padrão, exceto para a ação 'set_password'.
+        """
+        if self.action == 'set_password':
+            return PasswordResetSerializer
+        return self.serializer_class # Usa o ProfessorSerializer para todo o resto
 
+    # Sua ação 'set_password' já estava ótima e não precisa de mudanças.
+    @action(detail=True, methods=['post'], permission_classes=[IsCCAUser])
+    def set_password(self, request, pk=None):
+        professor = self.get_object()
+        user = professor.user
+        
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        new_password = serializer.validated_data['new_password']
+        
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({'status': 'senha redefinida com sucesso'}, status=status.HTTP_200_OK)
 
+    
 class PasswordResetRequestView(APIView):
     """Inicia o fluxo de 'esqueci minha senha' enviando um e-mail ao usuário."""
     permission_classes = [AllowAny]
@@ -166,27 +189,29 @@ class PasswordResetConfirmView(APIView):
         )
 
 
-class ChangePasswordView(generics.UpdateAPIView):
-    """Permite que um usuário autenticado altere sua própria senha."""
+class ChangePasswordView(APIView):
+    """
+    Endpoint para um usuário autenticado alterar sua própria senha.
+    Usa um serializer customizado para validar e salvar a nova senha.
+    """
     serializer_class = ChangePasswordSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_object(self):
-        return self.request.user
-
-    def update(self, request, *args, **kwargs):
-        """Valida e altera a senha do usuário logado."""
-        user = self.get_object()
-        serializer = self.get_serializer(data=request.data, context={'request': request})
+    def put(self, request, *args, **kwargs):
+        # Passamos o 'context' para o serializer para que ele tenha acesso ao 'request'
+        serializer = self.get_serializer(data=request.data)
+        
+        # Força a validação. Se falhar, levanta um erro 400.
         serializer.is_valid(raise_exception=True)
-
-        user.set_password(serializer.validated_data['new_password'])
-        user.save()
-
+        
+        # Se a validação passou, chamamos nosso método .save() customizado
+        serializer.save()
+        
         return Response({"detail": "Senha alterada com sucesso."}, status=status.HTTP_200_OK)
 
 
 class LogoutView(APIView):
+
     """Lida com o logout do usuário adicionando o refresh token à blacklist."""
     permission_classes = [IsAuthenticated]
 
@@ -233,24 +258,53 @@ class UserViewSet(mixins.DestroyModelMixin,
     
 
 class CursoViewSet(viewsets.ModelViewSet):
-    queryset = Curso.objects.all()
+    """
+    ViewSet para Cursos, com status automático e permissões por perfil.
+    """
     serializer_class = CursoSerializer
-    permission_classes = [IsProfessorUser] 
+    
+    def get_queryset(self):
+        """
+        Este método é o coração da lógica de visualização.
+        Ele filtra quais cursos cada tipo de usuário pode ver.
+        """
+        user = self.request.user
+
+        if not user.is_authenticated:
+            return Curso.objects.none()
+
+        if user.groups.filter(name='PROFESSOR').exists():
+            return Curso.objects.filter(criador=user.professor)
+        
+        if user.groups.filter(name='CCA').exists():
+            return Curso.objects.all()
+        
+        # Alunos (ou qualquer outro grupo) só veem cursos com inscrições abertas.
+        return Curso.objects.filter(status=Curso.StatusChoices.INSCRICOES_ABERTAS)
+
+    def get_permissions(self):
+        """
+        Define quem pode fazer cada tipo de ação.
+        """
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsProfessorUser]
+        
+
+        elif self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.IsAuthenticated]
+        
+        else:
+            permission_classes = [permissions.IsAdminUser]
+
+        return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
         """
-        Este método é chamado pelo DRF antes de salvar um novo objeto.
-        É o lugar perfeito para nossa regra de negócio!
+        Ao criar um curso ('POST'), o sistema define o professor logado como o 'criador'.
+        O status será 'AGENDADO' por padrão, conforme definido no modelo.
         """
-        # 1. Pega o perfil de professor do usuário logado.
-        professor_criador = self.request.user.professor
-        
-        # 2. Salva o curso, passando o criador como argumento extra.
-        # O DRF é inteligente e vai associar a FK 'criador' corretamente.
-        curso_criado = serializer.save(criador=professor_criador)
-        
-        # 3. Adiciona o professor criador à lista ManyToMany de professores do curso.
-        curso_criado.professores.add(professor_criador)
+        # A permissão 'IsProfessorUser' já garante que request.user.professor existe.
+        serializer.save(criador=self.request.user.professor)
 
 
 

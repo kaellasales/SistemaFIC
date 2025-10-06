@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
-from .models import User, Municipio, Estado, Aluno, CustomUserManager, Role
+from .models import User, Municipio, Estado, Aluno, CustomUserManager
 
 
 @admin.register(Estado)
@@ -26,7 +26,7 @@ class UserAdmin(BaseUserAdmin):
     form = UserChangeForm
     model = User
 
-    list_display = ('email', 'first_name', 'last_name', 'is_staff', 'is_active')
+    list_display = ('id', 'email', 'first_name', 'last_name', 'is_staff', 'is_active')
     list_filter = ('is_staff', 'is_active')
     search_fields = ('email', 'first_name', 'last_name')
     ordering = ('email',)
@@ -54,10 +54,3 @@ class AlunoAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'user__email', 'cpf')
     list_filter = ('sexo', 'naturalidade', 'cidade')
 
-
-@admin.register(Role)
-class RoleAdmin(admin.ModelAdmin):
-    """Admin para modelo Aluno."""
-    list_display = ['name']
-    search_fields = ['name']
-    list_filter = ['name']
