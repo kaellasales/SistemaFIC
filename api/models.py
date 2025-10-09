@@ -177,30 +177,6 @@ class Curso(models.Model):
 
     
 
-# class Convite(models.Model):
-#     class StatusConvite(models.TextChoices):
-#         PENDENTE = 'PENDENTE', 'Pendente'
-#         ACEITO = 'ACEITO', 'Aceito'
-#         RECUSADO = 'RECUSADO', 'Recusado'
-
-#     curso = models.ForeignKey(Curso, on_delete=models.CASCADE)
-#     professor = models.ForeignKey(Professor, on_delete=models.CASCADE)
-    
-#     status = models.CharField(max_length=10, choices=StatusConvite.choices, default=StatusConvite.PENDENTE)
-    
-#     token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    
-#     data_envio = models.DateTimeField(auto_now_add=True)
-#     data_resposta = models.DateTimeField(null=True, blank=True)
-
-#     class Meta:
-#         unique_together = ('curso', 'professor') # Um professor só pode ser convidado uma vez para o mesmo curso
-
-#     def __str__(self):
-#         return f"Convite para {self.professor} no curso {self.curso.nome} ({self.status})"
-    
-
-
 class InscricaoAluno(models.Model):
     class StatusInscricao(models.TextChoices):
         AGUARDANDO_VALIDACAO = 'AGUARDANDO_VALIDACAO', 'Aguardando Validação'

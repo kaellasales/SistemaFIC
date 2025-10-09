@@ -13,7 +13,8 @@ from api.views import (
     AlunoRegistroView, AlunoPerfilView, ChangePasswordView,
     PasswordResetConfirmView, PasswordResetRequestView, LogoutView,
     ProfessorViewSet, UserViewSet, CursoViewSet,
-    InscricaoAlunoViewSet, MeView, 
+    InscricaoAlunoViewSet, MeView, FormOptionsView,
+    MunicipioViewSet, EstadoView
 )
 
 # --- Router para ViewSets ---
@@ -22,6 +23,7 @@ router.register(r'professor', ProfessorViewSet, basename='Professor')
 router.register(r'usuario', UserViewSet, basename="User")
 router.register(r'cursos', CursoViewSet,basename="Curso")
 router.register(r'inscricoes-aluno', InscricaoAlunoViewSet, basename='inscricao-aluno')
+router.register(r'municipios', MunicipioViewSet, basename="Municipio")
 
 # --- URLs da API (que serão documentadas) ---
 # PASSO 1: Crie uma lista separada para as URLs da API
@@ -34,13 +36,16 @@ api_urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # Perfis e usuários
-    path('perfil/aluno/', AlunoPerfilView.as_view(), name='perfil-aluno'),
+    path('alunos/me/', AlunoPerfilView.as_view(), name='perfil-aluno'),
+    path('form-options/aluno-perfil/', FormOptionsView.as_view(), name='form-options-aluno-perfil'),
     path("me/", MeView.as_view(), name="me"),
     path('registro/aluno/', AlunoRegistroView.as_view(), name='aluno-registro'),
     path('usuario/change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('usuario/reset-password/', PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('usuario/reset-password-confirm/<uidb64>/<token>/', PasswordResetConfirmView.as_view(), name='password-reset'),
     path('logout/', LogoutView.as_view(), name='auth_logout'),
+    # path('municipio/estado/<int:estado_id>', MunicipioView.as_view(), name='municipios-por-estado'),
+    path('estados/', EstadoView.as_view(), name='estados')
 ]
 
 # --- Configuração do Swagger/OpenAPI ---

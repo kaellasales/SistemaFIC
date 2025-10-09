@@ -8,6 +8,16 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 User = get_user_model()
 
+class EstadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Estado
+        fields = ['id', 'id_ibge', 'nome', 'uf', 'regiao', 'pais', 'longitude', 'latitude']
+
+class MunicipioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Municipio
+        fields = ['id', 'nome', 'estado']
+        
 class PasswordResetRequestSerializer(serializers.Serializer):
     """Recebe o e-mail para iniciar processo de reset de senha."""
 
@@ -80,6 +90,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer de criação de usuário com senha."""
+    perfil_completo = serializers.SerializerMethodField()
 
     password = serializers.CharField(
         write_only=True,
@@ -95,11 +106,14 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'password', 'groups']
+        fields = ['id', 'email', 'first_name', 'last_name', 'password', 'groups', 'perfil_completo']
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
-
+    
+    def get_perfil_completo(self, obj):
+        # A verificação é SÓ esta. Existe a relação com o perfil de aluno?
+        return hasattr(obj, 'perfil_aluno')
 
 class AlunoRegistroSerializer(UserSerializer):
     """Cria usuário e atribui automaticamente a role 'ALUNO'."""
@@ -112,43 +126,63 @@ class AlunoRegistroSerializer(UserSerializer):
 
 
 class AlunoPerfilSerializer(serializers.ModelSerializer):
-    """Gerencia o perfil de um aluno vinculado ao usuário logado."""
+    """
+    Gerencia a CRIAÇÃO e ATUALIZAÇÃO do perfil de um aluno.
+    """
 
-    user = UserUpdateSerializer(required=False, allow_null=True)
+    # 🔹 Para leitura (GET): mostra nome e id
+    uf_expedidor = EstadoSerializer(read_only=True)
+    naturalidade = MunicipioSerializer(read_only=True)
+    cidade = MunicipioSerializer(read_only=True)
+
+    # 🔹 Para escrita (POST/PUT): permite enviar só os IDs
+    uf_expedidor_id = serializers.PrimaryKeyRelatedField(
+        queryset=Estado.objects.all(),
+        source='uf_expedidor',
+        write_only=True,
+        required=False
+    )
+    naturalidade_id = serializers.PrimaryKeyRelatedField(
+        queryset=Municipio.objects.all(),
+        source='naturalidade',
+        write_only=True,
+        required=False
+    )
+    cidade_id = serializers.PrimaryKeyRelatedField(
+        queryset=Municipio.objects.all(),
+        source='cidade',
+        write_only=True,
+        required=False
+    )
 
     class Meta:
         model = Aluno
         fields = (
-            'user',
-            'data_nascimento', 'sexo', 'cpf',
-            'numero_identidade', 'orgao_expedidor', 'uf_expedidor',
-            'naturalidade', 'cep', 'logradouro', 'numero_endereco',
-            'bairro', 'cidade', 'telefone_celular',
+            'data_nascimento', 'sexo', 'cpf', 'numero_identidade',
+            'orgao_expedidor', 'uf_expedidor', 'uf_expedidor_id',
+            'naturalidade', 'naturalidade_id', 'cep',
+            'logradouro', 'numero_endereco', 'bairro',
+            'cidade', 'cidade_id', 'telefone_celular',
         )
-
-    def create(self, validated_data):
-        """Cria perfil de aluno e atualiza dados básicos do usuário."""
-        user_data = validated_data.pop('user', {})
-        user = self.context['request'].user
-
-        if isinstance(user_data, dict):
-            user.first_name = user_data.get('first_name', user.first_name)
-            user.last_name = user_data.get('last_name', user.last_name)
-            user.save()
-
-        return Aluno.objects.create(user=user, **validated_data)
+        
 
     def update(self, instance, validated_data):
-        """Atualiza perfil de aluno e dados básicos do usuário."""
+        """
+        Este método lida com a atualização TANTO do perfil do Aluno
+        QUANTO dos dados aninhados do User.
+        """
+        # 1. Pega os dados do usuário do payload
         user_data = validated_data.pop('user', {})
-        user = instance.user
+        
+        # 2. Atualiza os campos do User aninhado usando o serializer especialista
+        #    'partial=True' é importante para permitir atualizações parciais
+        user_serializer = UserUpdateSerializer(instance.user, data=user_data, partial=True)
+        user_serializer.is_valid(raise_exception=True)
+        user_serializer.save()
 
-        if isinstance(user_data, dict):
-            user.first_name = user_data.get('first_name', user.first_name)
-            user.last_name = user_data.get('last_name', user.last_name)
-            user.save()
-
+        # 3. Deixa o DRF fazer o resto do trabalho de atualizar os campos do Aluno
         return super().update(instance, validated_data)
+
 
 
 class ProfessorSerializer(serializers.ModelSerializer):

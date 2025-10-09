@@ -22,17 +22,96 @@ from api.serializer import (
     AlunoRegistroSerializer, AlunoPerfilSerializer, ProfessorSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
     ChangePasswordSerializer, UserSerializer, UserUpdateSerializer,
-    CursoSerializer, InscricaoAlunoSerializer,PasswordResetSerializer
+    CursoSerializer, InscricaoAlunoSerializer,PasswordResetSerializer,
+    MunicipioSerializer, EstadoSerializer
 )
+
+import logging
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        serializer = UserSerializer(user)
-        return Response(serializer.data)
+        data = UserSerializer(user).data
 
+        # Se o user tiver perfil de aluno, adiciona no response
+        if hasattr(user, "aluno"):
+            data["aluno"] = AlunoPerfilSerializer(user.aluno).data
+        elif hasattr(user, "professor"):
+            data["professor"] = ProfessorSerializer(user.professor).data
+        
+        return Response(data)
+    
+class EstadoView(APIView): 
+    def get(self, request):
+        try:
+            estados=Estado.objects.all()
+            serializer=EstadoSerializer(estados, many=True)
+            return Response(serializer.data, status.HTTP_200_OK)
+        except Exception as e:
+            logging.info(f'erro:{e}')
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+class MunicipioViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Endpoint para listar Municípios.
+    Pode ser filtrado por estado_id e por um termo de busca (search).
+    URL: /municipios/?estado_id=5&search=forta
+    """
+    serializer_class = MunicipioSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Esta função é o coração do filtro. Ela lê os parâmetros da URL.
+        """
+        queryset = Municipio.objects.all()
+        
+        # 1. Filtra por Estado (se o parâmetro 'estado_id' for enviado)
+        estado_id = self.request.query_params.get('estado_id', None)
+        if estado_id is not None:
+            queryset = queryset.filter(estado_id=estado_id)
+
+        # 2. Filtra pelo termo de busca (se o parâmetro 'search' for enviado)
+        search_term = self.request.query_params.get('search', None)
+        if search_term:
+            # '__icontains' faz a busca "contém" sem diferenciar maiúsculas/minúsculas
+            queryset = queryset.filter(nome__icontains=search_term)
+        
+        # 3. Ordena e limita o número de resultados para não sobrecarregar
+        return queryset.order_by('nome')[:20]
+
+# class MunicipioView(APIView):
+#     def get(self, request, estado_id):
+#         try:
+#             municipios = Municipio.objects.filter(estado=estado_id)
+#             serializer = MunicipioSerializer(municipios, many=True)
+#             return Response(serializer.data, status.HTTP_200_OK)
+#         except Exception as e:
+#             return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+class FormOptionsView(APIView):
+    """
+    Endpoint que fornece as opções (choices) para os formulários do frontend.
+    URL: /api/form-options/aluno-perfil/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # Pega as opções diretamente da classe do modelo Aluno
+        sexo_options = [{'value': choice[0], 'label': choice[1]} for choice in Aluno.SexoChoices.choices]
+        orgao_expedidor_options = [{'value': choice[0], 'label': choice[1]} for choice in Aluno.OrgaoExpedidor.choices]
+        
+        # Monta a resposta em um JSON organizado
+        options_data = {
+            'sexo': sexo_options,
+            'orgao_expedidor': orgao_expedidor_options,
+        }
+        
+        return Response(options_data)
 
 class AlunoRegistroView(generics.CreateAPIView):
     """Endpoint público para que novos alunos possam se registrar."""
@@ -40,45 +119,53 @@ class AlunoRegistroView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
 
-class AlunoPerfilView(mixins.CreateModelMixin,
-                      mixins.RetrieveModelMixin,
-                      mixins.UpdateModelMixin,
-                      mixins.DestroyModelMixin,
-                      generics.GenericAPIView):
-    """Endpoint único para gerenciar o perfil do aluno logado."""
-    serializer_class = AlunoPerfilSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self):
-        """Retorna o perfil do aluno vinculado ao usuário logado."""
-        try:
-            return Aluno.objects.get(user=self.request.user)
-        except Aluno.DoesNotExist:
-            raise Http404
-
-    # --- Métodos HTTP ---
+class AlunoPerfilView(APIView):
+    """
+    Endpoint para gerenciar o perfil do aluno logado.
+    - GET: Retorna o perfil se existir, 404 se não.
+    - PATCH/PUT: Cria ou atualiza o perfil.
+    """
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        """GET: Retorna o perfil do aluno logado."""
-        return self.retrieve(request, *args, **kwargs)
-
-    def post(self, request, *args, **kwargs):
-        """POST: Cria o perfil do aluno, se ainda não existir."""
-        if Aluno.objects.filter(user=request.user).exists():
-            raise ValidationError({"detail": "Perfil já existe. Para atualizar, use PUT ou PATCH."})
-        return self.create(request, *args, **kwargs)
-
-    def put(self, request, *args, **kwargs):
-        """PUT: Atualiza o perfil do aluno por completo."""
-        return self.update(request, *args, **kwargs)
+        """
+        GET: Apenas LÊ o perfil do aluno.
+        """
+        try:
+            # Tenta buscar o perfil do aluno logado.
+            profile = Aluno.objects.get(user=request.user)
+            # Se encontrar, serializa e retorna os dados.
+            serializer = AlunoPerfilSerializer(profile)
+            return Response(serializer.data)
+        except Aluno.DoesNotExist:
+            # Se NÃO encontrar, retorna 404. É o sinal que o frontend espera
+            # para saber que o formulário deve ficar em branco.
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
     def patch(self, request, *args, **kwargs):
-        """PATCH: Atualiza o perfil do aluno parcialmente."""
-        return self.partial_update(request, *args, **kwargs)
+        """
+        PATCH: Atualiza (ou cria, se não existir) o perfil do aluno.
+        """
+        try:
+            # Tenta pegar a instância do perfil que já existe.
+            instance = Aluno.objects.get(user=request.user)
+            # Se encontrar, prepara o serializer para uma ATUALIZAÇÃO.
+            serializer = AlunoPerfilSerializer(instance, data=request.data, partial=True)
+        except Aluno.DoesNotExist:
+            # Se não encontrar, prepara o serializer para uma CRIAÇÃO.
+            serializer = AlunoPerfilSerializer(data=request.data, context={'request': request})
 
-    def perform_create(self, serializer):
-        """Associa o usuário logado ao criar o perfil."""
-        serializer.save()
+        # Valida os dados enviados...
+        serializer.is_valid(raise_exception=True)
+        # ...e salva (o .save() vai chamar 'update' ou 'create' do serializer, dependendo do caso).
+        serializer.save(user=request.user)
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    # Fazemos o PUT se comportar exatamente como o PATCH
+    def put(self, request, *args, **kwargs):
+        return self.patch(request, *args, **kwargs)
+
 
 
 class ProfessorViewSet(viewsets.ModelViewSet):
