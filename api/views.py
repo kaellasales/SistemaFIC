@@ -36,8 +36,8 @@ class MeView(APIView):
         data = UserSerializer(user).data
 
         # Se o user tiver perfil de aluno, adiciona no response
-        if hasattr(user, "aluno"):
-            data["aluno"] = AlunoPerfilSerializer(user.aluno).data
+        if hasattr(user, "perfil_aluno"):
+            data["aluno"] = AlunoPerfilSerializer(user.perfil_aluno).data
         elif hasattr(user, "professor"):
             data["professor"] = ProfessorSerializer(user.professor).data
         
@@ -367,7 +367,14 @@ class CursoViewSet(viewsets.ModelViewSet):
             return Curso.objects.all()
         
         # Alunos (ou qualquer outro grupo) só veem cursos com inscrições abertas.
-        return Curso.objects.filter(status=Curso.StatusChoices.INSCRICOES_ABERTAS)
+        from django.utils import timezone
+        now = timezone.now()
+        
+        return Curso.objects.filter(
+            status=Curso.StatusChoices.INSCRICOES_ABERTAS,
+            data_inicio_inscricoes__lte=now,
+            data_fim_inscricoes__gte=now
+        )
 
     def get_permissions(self):
         """
@@ -411,15 +418,32 @@ class InscricaoAlunoViewSet(mixins.CreateModelMixin, # Permite POST (create)
         """Define permissões por ação."""
         if self.action == 'create':
             self.permission_classes = [IsAlunoUser]
-        else: # list, retrieve, validar_inscricao
+        elif self.action == 'list':
+            # Alunos podem listar suas próprias inscrições, admins podem listar todas
+            self.permission_classes = [permissions.IsAuthenticated]
+        else: # retrieve, validar_inscricao
             self.permission_classes = [permissions.IsAdminUser]
         return super().get_permissions()
+    
+    def get_queryset(self):
+        """Filtra inscrições baseado no tipo de usuário."""
+        user = self.request.user
+        
+        if user.groups.filter(name='CCA').exists():
+            # Admin vê todas as inscrições
+            return InscricaoAluno.objects.all()
+        elif user.groups.filter(name='ALUNO').exists():
+            # Aluno vê apenas suas próprias inscrições
+            return InscricaoAluno.objects.filter(aluno__user=user)
+        else:
+            # Outros usuários não veem nada
+            return InscricaoAluno.objects.none()
 
     def create(self, request, *args, **kwargs):
         """Aluno solicita inscrição em um curso."""
         curso_id = request.data.get('curso_id')
         tipo_vaga_escolhido = request.data.get('tipo_vaga')
-        aluno = request.user.aluno
+        aluno = request.user.perfil_aluno
 
         if not curso_id or not tipo_vaga_escolhido:
             return Response({'error': 'Os campos "curso_id" e "tipo_vaga" são obrigatórios.'}, status=status.HTTP_400_BAD_REQUEST)

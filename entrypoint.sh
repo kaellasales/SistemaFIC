@@ -2,11 +2,14 @@
 
 # entrypoint.sh
 
+echo "⏳ Aguardando o banco de dados estar pronto..."
+sleep 10
+
 echo "🚀 Aplicando as migrações do banco de dados..."
-python manage.py migrate --noinput
+python manage.py migrate
 
 echo "🎨 Coletando arquivos estáticos..."
-python manage.py collectstatic --noinput --clear
+python manage.py collectstatic --clear
 
 # --- CRIAÇÃO DO SUPERUSUÁRIO AUTOMÁTICA ---
 echo "🔐 Verificando e criando superusuário..."

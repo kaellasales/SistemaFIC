@@ -25,4 +25,4 @@ class IsProfessorOrCCAUser(permissions.BasePermission):
     
 class IsAlunoUser(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and hasattr(request.user, 'aluno')
+        return request.user.is_authenticated and hasattr(request.user, 'perfil_aluno')
