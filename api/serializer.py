@@ -309,7 +309,7 @@ class InscricaoAlunoSerializer(serializers.ModelSerializer):
         child=serializers.FileField(allow_empty_file=False),
         write_only=True, required=False
     )
-    matricula = serializers.CharField(max_length=50, required=False, write_only=True)
+    matricula = serializers.CharField(max_length=14, required=False, write_only=True)
 
     class Meta:
         model = InscricaoAluno
