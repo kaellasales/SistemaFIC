@@ -1,12 +1,14 @@
 from rest_framework import generics, status, viewsets, permissions, mixins
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework import serializers
 
-from api.permissions import IsProfessorUser, IsAlunoUser, IsAdminUser, IsCCAUser
+from api.permissions_custom import IsProfessorUser, IsAdminUser, IsCCAUser, IsAlunoUser
 
 from django.conf import settings
 from django.core.mail import send_mail, EmailMultiAlternatives
@@ -23,10 +25,13 @@ from api.serializer import (
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
     ChangePasswordSerializer, UserSerializer, UserUpdateSerializer,
     CursoSerializer, InscricaoAlunoSerializer,PasswordResetSerializer,
-    MunicipioSerializer, EstadoSerializer
+    MunicipioSerializer, EstadoSerializer, AlunoReadOnlySerializer, 
+    CursoBasicSerializer
 )
 
 import logging
+
+logger = logging.getLogger(__name__)
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -83,14 +88,6 @@ class MunicipioViewSet(viewsets.ReadOnlyModelViewSet):
         # 3. Ordena e limita o número de resultados para não sobrecarregar
         return queryset.order_by('nome')[:20]
 
-# class MunicipioView(APIView):
-#     def get(self, request, estado_id):
-#         try:
-#             municipios = Municipio.objects.filter(estado=estado_id)
-#             serializer = MunicipioSerializer(municipios, many=True)
-#             return Response(serializer.data, status.HTTP_200_OK)
-#         except Exception as e:
-#             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
 class FormOptionsView(APIView):
@@ -119,13 +116,24 @@ class AlunoRegistroView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
 
+class AlunoViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet para que o CCA/Admin possa VISUALIZAR os perfis dos alunos.
+    - GET /api/alunos/ (lista todos os alunos)
+    - GET /api/alunos/{id}/ (busca um aluno específico)
+    """
+    queryset = Aluno.objects.all().select_related('user') 
+    serializer_class = AlunoReadOnlySerializer
+    permission_classes = [IsCCAUser]
+
+
 class AlunoPerfilView(APIView):
     """
     Endpoint para gerenciar o perfil do aluno logado.
     - GET: Retorna o perfil se existir, 404 se não.
     - PATCH/PUT: Cria ou atualiza o perfil.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         """
@@ -135,7 +143,7 @@ class AlunoPerfilView(APIView):
             # Tenta buscar o perfil do aluno logado.
             profile = Aluno.objects.get(user=request.user)
             # Se encontrar, serializa e retorna os dados.
-            serializer = AlunoPerfilSerializer(profile)
+            serializer = AlunoReadOnlySerializer(profile)
             return Response(serializer.data)
         except Aluno.DoesNotExist:
             # Se NÃO encontrar, retorna 404. É o sinal que o frontend espera
@@ -145,6 +153,7 @@ class AlunoPerfilView(APIView):
     def patch(self, request, *args, **kwargs):
         """
         PATCH: Atualiza (ou cria, se não existir) o perfil do aluno.
+        
         """
         try:
             # Tenta pegar a instância do perfil que já existe.
@@ -395,67 +404,64 @@ class CursoViewSet(viewsets.ModelViewSet):
 
 
 
-class InscricaoAlunoViewSet(mixins.CreateModelMixin, # Permite POST (create)
-                            mixins.ListModelMixin,   # Permite GET (list)
-                            mixins.RetrieveModelMixin, # Permite GET (retrieve by id)
-                            viewsets.GenericViewSet):
+
+class InscricaoAlunoViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gerenciar as inscrições de alunos.
-    - Aluno: pode criar (solicitar) uma inscrição.
-    - Admin: pode listar, ver e validar inscrições.
+    - Aluno: pode criar e listar/ver as SUAS próprias inscrições.
+    - Admin/CCA: pode listar/ver TODAS as inscrições e validá-las.
     """
-    queryset = InscricaoAluno.objects.all()
     serializer_class = InscricaoAlunoSerializer
+    parser_classes = (MultiPartParser, FormParser) # Essencial para o upload de arquivos
+    
+    def get_queryset(self):
+        """
+        FILTRAGEM AVANÇADA E SEGURA:
+        - Filtra por curso, se o 'curso_id' for passado na URL.
+        - Aplica a segurança para garantir que cada usuário só veja o que pode.
+        """
+        user = self.request.user
+        queryset = InscricaoAluno.objects.all() # Começa com todas as inscrições
+
+        # --- A NOVA LÓGICA DE FILTRO POR CURSO ---
+        # Pega o 'curso_id' dos parâmetros da URL (ex: ?curso_id=5)
+        curso_id = self.request.query_params.get('curso_id', None)
+        if curso_id is not None:
+            # Filtra o queryset para incluir apenas inscrições do curso especificado
+            queryset = queryset.filter(curso_id=curso_id)
+
+        # --- A LÓGICA DE SEGURANÇA QUE JÁ TINHAMOS ---
+        if hasattr(user, 'perfil_aluno'):
+            # Se for um aluno, ele SÓ pode ver as SUAS inscrições, mesmo que tente filtrar por curso.
+            return queryset.filter(aluno=user.perfil_aluno)
+        
+        if user.is_staff or user.groups.filter(name='CCA').exists():
+            # Se for CCA, ele vê a lista já filtrada por curso (se o parâmetro foi passado).
+            return queryset
+        
+        return InscricaoAluno.objects.none()
 
     def get_permissions(self):
-        """Define permissões por ação."""
+        """Define permissões por ação, agora de forma correta."""
         if self.action == 'create':
+            # Apenas Alunos podem se inscrever.
             self.permission_classes = [IsAlunoUser]
-        else: # list, retrieve, validar_inscricao
-            self.permission_classes = [permissions.IsAdminUser]
+        elif self.action in ['list', 'retrieve']:
+            # Qualquer usuário autenticado pode TENTAR listar (o get_queryset fará a segurança).
+            self.permission_classes = [permissions.IsAuthenticated]
+        else: # validar_inscricao, update, destroy, etc.
+            # Apenas Admins/CCA podem fazer o resto.
+            self.permission_classes = [IsCCAUser] # ou sua permissão de CCA
         return super().get_permissions()
+    
+    def perform_create(self, serializer):
+        """
+        A única responsabilidade da view é injetar o 'aluno' logado
+        antes de salvar. Toda a validação já foi feita pelo serializer.
+        """
+        serializer.save(aluno=self.request.user.perfil_aluno)
 
-    def create(self, request, *args, **kwargs):
-        """Aluno solicita inscrição em um curso."""
-        curso_id = request.data.get('curso_id')
-        tipo_vaga_escolhido = request.data.get('tipo_vaga')
-        aluno = request.user.aluno
-
-        if not curso_id or not tipo_vaga_escolhido:
-            return Response({'error': 'Os campos "curso_id" e "tipo_vaga" são obrigatórios.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if tipo_vaga_escolhido not in ['INTERNO', 'EXTERNO']:
-            return Response({'error': 'O campo "tipo_vaga" deve ser "INTERNO" ou "EXTERNO".'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            with transaction.atomic():
-                curso = Curso.objects.select_for_update().get(id=curso_id)
-
-                vagas_totais = curso.vagas_internas if tipo_vaga_escolhido == 'INTERNO' else curso.vagas_externas
-                
-                inscricoes_confirmadas = InscricaoAluno.objects.filter(
-                    curso=curso, tipo_vaga=tipo_vaga_escolhido, status='CONFIRMADA'
-                ).count()
-
-                if inscricoes_confirmadas >= vagas_totais:
-                    return Response({'error': 'Não há mais vagas disponíveis.'}, status=status.HTTP_400_BAD_REQUEST)
-
-                inscricao, created = InscricaoAluno.objects.get_or_create(
-                    aluno=aluno, curso_id=curso_id,
-                    defaults={'status': 'AGUARDANDO_VALIDACAO', 'tipo_vaga': tipo_vaga_escolhido}
-                )
-
-                if not created:
-                    return Response({'error': 'Você já solicitou inscrição neste curso.'}, status=status.HTTP_400_BAD_REQUEST)
-                
-                serializer = self.get_serializer(inscricao)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-        except Curso.DoesNotExist:
-            return Response({'error': 'Curso não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({'error': 'Ocorreu um erro no servidor.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    @action(detail=True, methods=['post'], url_path='validar')
+    @action(detail=True, methods=['post'], url_path='validar',  parser_classes=[JSONParser] )
     def validar_inscricao(self, request, pk=None):
         """Admin valida ou recusa uma inscrição pendente."""
         inscricao = self.get_object()
@@ -474,3 +480,4 @@ class InscricaoAlunoViewSet(mixins.CreateModelMixin, # Permite POST (create)
         
         serializer = self.get_serializer(inscricao)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    

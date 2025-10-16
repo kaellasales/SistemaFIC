@@ -3,7 +3,8 @@ from django.db import transaction
 from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
 from api.models import(Aluno, Estado, Municipio,
-Professor, CustomUserManager, Curso, InscricaoAluno)
+Professor, CustomUserManager, Curso, InscricaoAluno, 
+Documento)
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 User = get_user_model()
@@ -14,6 +15,7 @@ class EstadoSerializer(serializers.ModelSerializer):
         fields = ['id', 'id_ibge', 'nome', 'uf', 'regiao', 'pais', 'longitude', 'latitude']
 
 class MunicipioSerializer(serializers.ModelSerializer):
+    estado = EstadoSerializer(read_only=True)
     class Meta:
         model = Municipio
         fields = ['id', 'nome', 'estado']
@@ -183,15 +185,48 @@ class AlunoPerfilSerializer(serializers.ModelSerializer):
         # 3. Deixa o DRF fazer o resto do trabalho de atualizar os campos do Aluno
         return super().update(instance, validated_data)
 
+class AlunoReadOnlySerializer(serializers.ModelSerializer):
+    """
+    Serializer de LEITURA para o perfil do Aluno.
+    Mostra todos os detalhes, incluindo o objeto 'user' completo.
+    """
+    user = UserSerializer(read_only=True)
+    
+    cidade = MunicipioSerializer(read_only=True)
+    naturalidade = MunicipioSerializer(read_only=True)
+    uf_expedidor = EstadoSerializer(read_only=True)
 
+    class Meta:
+        model = Aluno
+        fields = [
+            'id', 'user', 'data_nascimento', 'sexo', 'cpf', 'numero_identidade',
+            'orgao_expedidor', 'uf_expedidor', 'naturalidade', 'cep',
+            'logradouro', 'numero_endereco', 'bairro', 'cidade', 'telefone_celular',
+        ]
+class CursoBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Curso
+        fields = ['id', 'nome', 'status']
+        
 
 class ProfessorSerializer(serializers.ModelSerializer):
     user = UserSerializer() # Aninha o UserSerializer para leitura e escrita
+    total_courses = serializers.SerializerMethodField()
+    cursos_criados = CursoBasicSerializer(many=True, read_only=True)
 
     class Meta:
         model = Professor
-        fields = ['id', 'user', 'siape', 'cpf', 'data_nascimento']
+        fields = ['id', 'user', 'siape', 'cpf', 'data_nascimento', 'total_courses', 'cursos_criados']
         read_only_fields = ['id']
+
+    def get_total_courses(self, obj):
+        """
+        Esta função é chamada automaticamente para preencher o campo 'total_courses'.
+        'obj' aqui é a instância do Professor.
+        """
+        # Ele conta quantos cursos têm este professor como 'criador'
+        return obj.cursos_criados.count()
+    
 
     def create(self, validated_data):
         """
@@ -253,28 +288,79 @@ class AlunoBasicSerializer(serializers.ModelSerializer):
         fields = ['id', 'user']
 
 
-class CursoBasicSerializer(serializers.ModelSerializer):
+class DocumentoSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Curso
-        fields = ['id', 'nome']
-
+        model = Documento
+        fields = ['id', 'arquivo', 'nome_original', 'data_upload']
 
 class InscricaoAlunoSerializer(serializers.ModelSerializer):
     aluno = AlunoBasicSerializer(read_only=True)
     curso = CursoBasicSerializer(read_only=True)
-    
-    # Usamos um 'SerializerMethodField' para mostrar o texto do status, não só o código
+    documentos = DocumentoSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    # --- Campos de ESCRITA (para o frontend enviar) ---
+    curso_id = serializers.PrimaryKeyRelatedField(
+        queryset=Curso.objects.all(), source='curso', write_only=True
+    )
+    tipo_vaga = serializers.ChoiceField(choices=InscricaoAluno.TipoVaga.choices, write_only=True)
+    
+    arquivos_upload = serializers.ListField(
+        child=serializers.FileField(allow_empty_file=False),
+        write_only=True, required=False
+    )
+    matricula = serializers.CharField(max_length=50, required=False, write_only=True)
 
     class Meta:
         model = InscricaoAluno
         fields = [
-            'id',
-            'aluno',
-            'curso',
-            'status',
-            'status_display', # Campo extra para o frontend
-            'tipo_vaga',
-            'data_inscricao'
+            'id', 'aluno', 'curso', 'status', 'status_display', 'data_inscricao', 'documentos',
+            'curso_id', 'matricula','tipo_vaga', 'arquivos_upload'
         ]
-        read_only_fields = ['status', 'aluno']
+        read_only_fields = ['aluno', 'status']
+
+    def validate(self, data):
+        """
+        Este método é o "fiscal". Ele roda antes de qualquer tentativa de salvar.
+        É o lugar perfeito para as suas validações de negócio.
+        """
+        aluno = self.context['request'].user.perfil_aluno
+        curso = data.get('curso')
+        tipo_vaga = data.get('tipo_vaga')
+        matricula = data.get('matricula')
+
+        # Se for vaga interna, a matrícula é OBRIGATÓRIA
+        if tipo_vaga == 'INTERNO' and not matricula:
+            raise serializers.ValidationError({'matricula': 'Este campo é obrigatório para vagas internas.'})
+        
+        # 1. Validação de duplicação
+        if InscricaoAluno.objects.filter(aluno=aluno, curso=curso).exists():
+            raise serializers.ValidationError('Você já solicitou inscrição neste curso.')
+
+        # 2. Validação de vagas (com transação para segurança)
+        with transaction.atomic():
+            curso_locked = Curso.objects.select_for_update().get(id=curso.id)
+            vagas_totais = curso_locked.vagas_internas if tipo_vaga == 'INTERNO' else curso_locked.vagas_externas
+            inscricoes_confirmadas = InscricaoAluno.objects.filter(
+                curso=curso_locked, tipo_vaga=tipo_vaga, status='CONFIRMADA'
+            ).count()
+            if inscricoes_confirmadas >= vagas_totais:
+                raise serializers.ValidationError('Não há mais vagas disponíveis para este tipo.')
+        
+        return data
+
+    def create(self, validated_data):
+        """
+        Cria a Inscrição e depois os Documentos associados.
+        """
+        arquivos = validated_data.pop('arquivos_upload', [])
+        
+        # Cria a Inscrição com os dados já validados.
+        # 'aluno' será injetado pelo perform_create da ViewSet.
+        inscricao = super().create(validated_data)
+        
+        # Cria os objetos Documento para cada arquivo enviado
+        for arquivo in arquivos:
+            Documento.objects.create(inscricao=inscricao, arquivo=arquivo, nome_original=arquivo.name)
+            
+        return inscricao

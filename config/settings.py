@@ -14,6 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import logging
 import os
+import sys
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -43,8 +44,9 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    'drf_yasg',
     'corsheaders',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
     'api'
 ]
 
@@ -141,6 +143,9 @@ STATIC_ROOT = '/app/static'
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGS_DIR = '/app/logs'
@@ -157,17 +162,39 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
 AUTH_USER_MODEL = 'api.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ), 
-    'DEFAULT_PERMISSION_CLASSES': (
+    'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
-    )
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema'
 }
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "SistemaFIC",
+    "DESCRIPTION": """
+        API do backend do Sistema de Inscrição em Cursos (FIC).
+
+        Funcionalidades principais:
+        - Gerenciamento de autenticação e perfis de usuários (Alunos, Professores, Admins)
+        - Criação, listagem e detalhamento de cursos
+        - Sistema de inscrição de alunos em cursos
+        - Controle de acesso baseado em papéis (RBAC)
+    """,
+    "VERSION": "v1",
+    "SERVE_INCLUDE_SCHEMA": False,  # evita incluir schema no schema 🤯
+    "COMPONENT_SPLIT_REQUEST": True,
+    "CONTACT": {"email": "kaellasales09@gmail.com"},
+    "LICENSE": {"name": "BSD License"},
+    "TOS": "https://www.google.com/policies/terms/",
+    "SCHEMA_PATH_PREFIX": r"/",  # mantém tuas rotas como estão (sem /api)
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+}
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),  # Token de acesso dura 1 hora
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),     # Token de atualização dura 7 dias
@@ -206,5 +233,44 @@ SWAGGER_SETTINGS = {
             'in': 'header',            # onde o token será enviado
             'description': 'Digite: Bearer <seu_token_jwt>',
         }
+    },
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'stream': sys.stdout,  # <---- ESSENCIAL pro Docker ver
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        # Log específico pra tuas views
+        'api': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
     },
 }

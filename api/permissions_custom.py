@@ -6,9 +6,13 @@ class IsAdminUser(BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_staff
     
-class IsCCAUser(BasePermission):
+class IsCCAUser(permissions.BasePermission):
+    """
+    Permite acesso apenas a usuários que pertencem ao grupo 'CCA'.
+    """
     def has_permission(self, request, view):
-        return request.user.groups.filter(name="CCA").exists()
+        # Verifica se o usuário está logado E se ele pertence ao grupo 'CCA'
+        return request.user.is_authenticated and request.user.groups.filter(name='CCA').exists()
     
 class IsProfessorUser(permissions.BasePermission):
     """Permite acesso apenas a usuários que tenham um perfil de Professor."""
@@ -25,4 +29,4 @@ class IsProfessorOrCCAUser(permissions.BasePermission):
     
 class IsAlunoUser(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and hasattr(request.user, 'aluno')
+        return request.user.is_authenticated and request.user.groups.filter(name='ALUNO').exists()

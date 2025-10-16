@@ -183,16 +183,48 @@ class InscricaoAluno(models.Model):
         CONFIRMADA = 'CONFIRMADA', 'Confirmada'
         LISTA_ESPERA = 'LISTA_ESPERA', 'Lista de Espera'
         CANCELADA = 'CANCELADA', 'Cancelada'
-
+    class TipoVaga(models.TextChoices):
+        INTERNO = 'INTERNO', 'Interno'
+        EXTERNO = 'EXTERNO', 'Externo'
+        NI = 'NI', 'ni'
+    
     aluno = models.ForeignKey(Aluno, on_delete=models.CASCADE)
     curso = models.ForeignKey(Curso, on_delete=models.CASCADE)
     
     status = models.CharField(max_length=30, choices=StatusInscricao.choices, default=StatusInscricao.AGUARDANDO_VALIDACAO)
     data_inscricao = models.DateTimeField(auto_now_add=True)
     
-    tipo_vaga = models.CharField(max_length=10, choices=(('INTERNO', 'Interno'), ('EXTERNO', 'Externo')))
+    tipo_vaga = models.CharField(max_length=10, choices=TipoVaga.choices)
+    matricula = models.CharField(
+        max_length=14, 
+        blank=True, 
+        null=True, 
+        verbose_name="Matrícula(para vagas internas)"
+    )
     class Meta:
         unique_together = ('aluno', 'curso')
 
     def __str__(self):
         return f"Inscrição de {self.aluno.user.username} em {self.curso.nome}"
+    
+
+class Documento(models.Model):
+    # A ligação: Cada documento pertence a UMA inscrição.
+    inscricao = models.ForeignKey(
+        InscricaoAluno, 
+        on_delete=models.CASCADE, 
+        related_name='documentos'
+    )
+
+    # O campo que guarda o arquivo.
+    # 'upload_to' diz ao Django para salvar os arquivos em uma pasta 'documentos_inscricao'
+    # dentro da sua pasta de media.
+    arquivo = models.FileField(upload_to='documentos_inscricao/')
+
+    # Opcional: o nome que o arquivo tinha no computador do usuário
+    nome_original = models.CharField(max_length=255, blank=True)
+
+    data_upload = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Documento para a inscrição {self.inscricao.id} - {self.nome_original}"
